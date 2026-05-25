@@ -1,42 +1,47 @@
 package main
 
+package main
+
 import (
 	"fmt"
 	"log"
 	"net/http"
-
+	"2OFUS/websocket"
 	"github.com/gorilla/websocket"
 )
-
-var clients []*websocket.Conn
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func handleWs(w http.ResponseWriter, r *http.Request) {
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("upgrade error:", err)
 		return
 	}
 
-	clients = append(clients, conn)
-	fmt.Println("client connected, total:", len(clients))
+	userID := r.URL.Query().Get("uid")
+
+	client := &websocket.Client{
+		UserID: userID,
+		Conn:   conn,
+	}
+
+	websocket.Clients[userID] = client
+
+	fmt.Println("client connected:", userID)
 
 	for {
-		_, msg, err := conn.ReadMessage()
+		var msg websocket.WSMessage
+		err := conn.ReadJSON(&msg)
 		if err != nil {
-			removeClient(conn)
-			fmt.Println("client disconnected, total:", len(clients))
+			delete(websocket.Clients, userID)
+			fmt.Println("client disconnected:", userID)
 			break
 		}
-
-		fmt.Println("got message:", string(msg))
-
-		for _, c := range clients {
-			c.WriteMessage(websocket.TextMessage, msg)
-		}
+		websocket.HandleMessage(client, msg)
 	}
 }
 
