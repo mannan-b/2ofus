@@ -1,6 +1,10 @@
 package service
 import (
-	"2OFUS/websocket" // Import your local folder (Module Name / Folder Name)
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+	"2ofus/websocket"
 )
 
 func validateChat(data websocket.ChatData) bool {
@@ -38,6 +42,7 @@ func createMessage(
 ) map[string]interface{} {
 
 	message := map[string]interface{}{
+		"id":   fmt.Sprintf("%d", time.Now().UnixNano()),
 		"from": sender.UserID,
 		"to":   data.To,
 		"msg":  data.Msg,
@@ -48,7 +53,18 @@ func createMessage(
 
 func saveMessage(message map[string]interface{}) {
 
-	fmt.Println("saving message to db")
+	file, _ := os.OpenFile(
+		"messages.json",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+		0644,
+	)
+
+	defer file.Close()
+
+	bytes, _ := json.Marshal(message)
+
+	file.Write(bytes)
+	file.Write([]byte("\n"))
 }
 
 func deliverMessage(
@@ -58,20 +74,25 @@ func deliverMessage(
 
 	receiver.Conn.WriteJSON(websocket.WSMessage{
 		T: "chat",
-		D: message,
+		D: mustMarshal(message),
 	})
 }
 
-func sendAcknowledgement(sender *websocket.Client) {
+func sendAcknowledgement(
+	sender *websocket.Client,
+	message map[string]interface{},
+) {
+
+	ack := map[string]interface{}{
+		"id":     message["id"],
+		"status": "sent",
+	}
 
 	sender.Conn.WriteJSON(websocket.WSMessage{
 		T: "ack",
-		D: websocket.AckData{
-			Status: "sent",
-		},
+		D: mustMarshal(ack),
 	})
 }
-
 func triggerNotification(
 	receiver *websocket.Client,
 	message map[string]interface{},
@@ -81,15 +102,7 @@ func triggerNotification(
 }
 
 func HandleChat(sender *websocket.Client, data websocket.ChatData) {
-	/*
-	1. Validate packet
-	2. Identify sender
-	3. Create message object
-	4. Save to DB
-	5. Deliver to recipient
-	6. Send acknowledgements
-	7. Trigger notifications
-	*/
+
 	if !validateChat(data) {
 		fmt.Println("invalid chat packet")
 		return
@@ -108,7 +121,48 @@ func HandleChat(sender *websocket.Client, data websocket.ChatData) {
 
 	deliverMessage(receiver, message)
 
-	sendAcknowledgement(sender)
-
+	sendAcknowledgement(sender, message)
 	triggerNotification(receiver, message)
+}
+
+func HandleTyping(sender *websocket.Client, data websocket.TypingData) {
+
+	receiver, ok := getReceiver(data.To)
+
+	if !ok {
+		return
+	}
+
+	payload := map[string]interface{}{
+		"from": sender.UserID,
+	}
+
+	receiver.Conn.WriteJSON(websocket.WSMessage{
+		T: "typing",
+		D: mustMarshal(payload),
+	})
+}
+
+func HandleSeen(sender *websocket.Client, data websocket.SeenData) {
+
+	for _, client := range websocket.Clients {
+
+		client.Conn.WriteJSON(websocket.WSMessage{
+			T: "seen",
+			D: mustMarshal(map[string]interface{}{
+				"mid": data.MID,
+			}),
+		})
+	}
+}
+
+func mustMarshal(v interface{}) json.RawMessage {
+
+	bytes, err := json.Marshal(v)
+
+	if err != nil {
+		return nil
+	}
+
+	return bytes
 }
