@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"2ofus/service"
 	"2ofus/websocket"
@@ -46,17 +47,24 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("client disconnected:", userID)
 			break
 		}
+		fmt.Println("received ws message type:", msg.T)
 		websocket.HandleMessage(client, msg, service.Router{})
 	}
 }
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "index.html")
 	})
 
 	http.HandleFunc("/ws", handleWs)
 
-	fmt.Println("server running at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	fmt.Println("server running at http://localhost:" + port)
+	log.Fatal(http.ListenAndServe(addr, nil))
 }

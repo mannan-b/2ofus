@@ -45,6 +45,31 @@ func HandleMessage(client *Client, msg WSMessage, dispatcher Dispatcher) {
 		}
 		dispatcher.HandleSeen(client, data)
 
+	case "key":
+		// Relay public key to the intended recipient. Server does not store private material.
+		var payload struct {
+			To  string `json:"to"`
+			Pub string `json:"pub"`
+		}
+
+		if err := json.Unmarshal(msg.D, &payload); err != nil {
+			fmt.Println("key parse error:", err)
+			return
+		}
+
+		fmt.Println("relaying key from", client.UserID, "to", payload.To)
+
+		receiver, ok := Clients[payload.To]
+		if !ok {
+			fmt.Println("key relay: receiver not connected:", payload.To)
+			return
+		}
+
+		// forward with sender metadata
+		forward := map[string]string{"from": client.UserID, "pub": payload.Pub}
+		b, _ := json.Marshal(forward)
+		receiver.Conn.WriteJSON(WSMessage{T: "key", D: b})
+
 	default:
 		fmt.Println("unknown event:", msg.T)
 	}

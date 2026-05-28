@@ -13,6 +13,10 @@ type ChatData struct {
 	To      string `json:"to"`
 	Msg string `json:"msg"`
 	ID string `json:"id"`
+	// Encrypted fields (optional)
+	Ciphertext string `json:"ct,omitempty"`
+	Nonce string `json:"nonce,omitempty"`
+	SenderPub string `json:"spub,omitempty"`
 }
 
 //typing-indicator
