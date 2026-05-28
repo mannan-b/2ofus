@@ -12,6 +12,7 @@ type WSMessage struct {
 type ChatData struct {
 	To      string `json:"to"`
 	Msg string `json:"msg"`
+	ID string `json:"id"`
 }
 
 //typing-indicator

@@ -1,16 +1,17 @@
 package main
 
-package main
-
 import (
 	"fmt"
 	"log"
 	"net/http"
-	"2OFUS/websocket"
-	"github.com/gorilla/websocket"
+
+	"2ofus/service"
+	"2ofus/websocket"
+
+	gws "github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
+var upgrader = gws.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
@@ -23,6 +24,10 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := r.URL.Query().Get("uid")
+
+	if userID == "" {
+		userID = "anonymous"
+	}
 
 	client := &websocket.Client{
 		UserID: userID,
@@ -41,16 +46,7 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("client disconnected:", userID)
 			break
 		}
-		websocket.HandleMessage(client, msg)
-	}
-}
-
-func removeClient(conn *websocket.Conn) {
-	for i, c := range clients {
-		if c == conn {
-			clients = append(clients[:i], clients[i+1:]...)
-			return
-		}
+		websocket.HandleMessage(client, msg, service.Router{})
 	}
 }
 
